@@ -1,5 +1,5 @@
 [project]
-name = "io_helpers"
+name = "lakehouse_io"
 version = "0.1.0"
 description = "engine read/write helpers (pyarrow, pyiceberg, sparkiceberg, sparkdelta, deltalake) + shared schema guards"
 requires-python = ">=3.12"
@@ -12,4 +12,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["io_helpers"]
+packages = ["lakehouse_io"]
