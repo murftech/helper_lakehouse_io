@@ -170,16 +170,23 @@ def write_span(df, spark, fqn, span_col: str, show_partitions=False):
 
     print(f'RUN: using pyspark DataFrameWriterV2, df.writeTo.overwrite, into table: {fqn}')
 
-    # trip Spark's too many distinct values WARN - raise the threshold just for this call
-    prior = spark.conf.get('spark.sql.debug.maxToStringFields')
-    spark.conf.set('spark.sql.debug.maxToStringFields', '200')
+    # trip Spark's too many distinct values WARN - raise the threshold just for this call.
+    # best-effort: spark.sql.debug.* isn't exposed over Spark Connect (Databricks serverless
+    # talks to the driver this way regardless of engine) - skip silently there, it only
+    # controls a cosmetic WARN, never the write itself.
+    try:
+        prior = spark.conf.get('spark.sql.debug.maxToStringFields')
+        spark.conf.set('spark.sql.debug.maxToStringFields', '200')
+    except Exception:
+        prior = None
 
     ### main ###
     # a wide IN-list condition makes the write plan's string repr wide enough to
     df.writeTo(fqn).overwrite(condition)
     ### main ###
 
-    spark.conf.set('spark.sql.debug.maxToStringFields', prior)
+    if prior is not None:
+        spark.conf.set('spark.sql.debug.maxToStringFields', prior)
 
     print(f'DONE:  delta -> {fqn}  (overwrite, IN-list)')
     

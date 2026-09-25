@@ -1,26 +1,4 @@
 """Provision local Delta tables with delta-rs (the `deltalake` package) - no JVM, no Spark.
-Same role helper_pyiceberg_io plays for iceberg: provisioning lives here, never
-implicitly inside a write. The JVM write/read path is helper_sparkdelta_io.
-
-THE ONE BIG DIFFERENCE FROM ICEBERG - there is no catalog file.
-Iceberg needs _icebergcatalog.db to map a name -> metadata location. A Delta table
-carries its own metadata in <table>/_delta_log, so the DIRECTORY LAYOUT IS the catalog:
-
-    {full_warehouse_path}/{namespace}/{tbl_name}/_delta_log/...
-    e.g. .../lakehouse/delta/macroecons/t1/datagov__resale_flat_prices
-
-Spark addresses the same table by path:  delta.`<absolute table path>`  (see
-table_path_fqn below) - nothing to register, nothing forgotten between sessions.
-
-TABLE FEATURES - kept at delta-rs defaults on purpose: protocol (1,2), no features.
-VERIFIED 2026-09-24 (deltalake 1.6.5 + delta-spark 4.0.1): a table created here is
-read AND written by Spark, and delta-rs reads back what Spark wrote. Turning on
-liquid clustering bumps the protocol to (1,7) + clustering/domainMetadata, after
-which delta-rs 1.6.5 can still read but can NO LONGER WRITE ('Unsupported table
-features required: [ClusteredTable, DomainMetadata]'). Re-probe before enabling
-any feature (clustering, deletion vectors, column mapping).
-
-Not here yet (Sail/non-JVM path): write_partition_guarded + a Sail read.
 """
 
 # CLAUDE UNDIGESTED
