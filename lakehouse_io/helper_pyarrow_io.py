@@ -148,13 +148,31 @@ def write_partition_guarded(
 
 
 # sub: currently useless i should always use the native function if by itself.
+def _assert_parquet_exists(root: str):
+    """Fail loud on a missing / empty local table. Sail 0.7 returns an EMPTY
+    dataframe (0 columns, 0 rows) for a path that does not exist - no error - so a
+    typo or a not-yet-run upstream step silently reads nothing (verified 2026-09-26).
+    Remote paths (s3://, dbfs:/ ...) are left to the engine."""
+    import os
+    if '://' in root or root.startswith('dbfs:'):
+        return
+    if not os.path.isdir(root):
+        raise FileNotFoundError(f'[read] no table at {root} - wrong path, or the step that writes it has not run yet')
+    for _dirpath, _dirs, files in os.walk(root):
+        if any(f.endswith('.parquet') for f in files):
+            return
+    raise FileNotFoundError(f'[read] {root} exists but holds no .parquet files')
+
+
 def read(spark, root: str):
+    _assert_parquet_exists(root)
     spark_dataframe = spark.read.parquet(root)
     return spark_dataframe
 
 # why not this name. but reading in pyaroows cannot be symmetrical to reading iceberg i think. check that both read are ddifferent.abs
 
 def sail_read_pyarrow(spark, root: str):
+    _assert_parquet_exists(root)
     spark_dataframe = spark.read.parquet(root)
     return spark_dataframe
 
@@ -189,13 +207,19 @@ def _existing_dataset_schema(path_to_table: str):
     ### main ###
     d = ds.dataset(path_to_table, format='parquet', partitioning='hive')
 
-    if d.partitioning is not None:
-        partition_keys = list(d.partitioning.schema.names)
-    else: 
-        partition_keys =[]
-
     list_schemas = [parquet.physical_schema for parquet in d.get_fragments()]
     schema_superset = pa.unify_schemas(list_schemas)
+
+    # a real hive partition column lives ONLY in the folder names, never inside the files.
+    # on an UNPARTITIONED folder (no key=value dirs) pyarrow 21 still reports every file
+    # column in d.partitioning.schema - trusting it made guard check 2 fail every second
+    # write with partition_keys=[] ("destination has ['date', ...], writing []").
+    # keeping only the names NOT in the physical schema gives [] there, ['sheet_year'] etc.
+    # for a partitioned table (verified 2026-09-26 on diary t1/diarymaster + a flat folder).
+    if d.partitioning is not None:
+        partition_keys = [n for n in d.partitioning.schema.names if n not in schema_superset.names]
+    else:
+        partition_keys = []
     ### main ###
 
     return partition_keys, schema_superset
